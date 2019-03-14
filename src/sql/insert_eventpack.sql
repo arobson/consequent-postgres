@@ -1,2 +1,2 @@
-INSERT INTO <%=entity%>_eventpack ( aggregate_id, aggregate_vector, content )
+INSERT INTO <%=entity%>_eventpack ( id, vector, content )
 VALUES ( $1, $2, $3 );

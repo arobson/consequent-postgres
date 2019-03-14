@@ -2,7 +2,11 @@ SELECT
 	id,
 	version,
 	vector,
-	content
+	content,
+	lastEventId,
+	lastCommandId,
+	lastCommandHandledOn,
+	lastEventAppliedOn
 FROM <%=entity%>_snapshot
 WHERE id = $1
 ORDER BY version DESC

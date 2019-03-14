@@ -1,82 +1,191 @@
-var templates = require( "./sql" );
-var when = require( "when" );
-var format = require( "util" ).format;
+const log = require('bole')('pg-actor-store')
+const templates = require('./sql')
 
-function createTable( client, type ) {
-	var sql = templates( "create_snapshot_table", type );
-	var create = client.query( sql, function( err, result ) {
-		if( err ) {
-			console.error( "Creating snapshot table for", type, "failed with", err );
-		}
-	} );
+async function createTable (client, type) {
+  const sql = templates('create_snapshot_table', type)
+  return client(pg =>
+    pg.query(sql)
+      .catch(
+        (err) => {
+          if (err) {
+            const msg = `Creating snapshot table for ${type} failed with ${err}`
+            log.error(msg)
+            throw new Error(msg)
+          }
+        }
+      )
+  )
 }
 
-function fetch( client, queryName, sql, actorId ) {
-	return when.promise( function( resolve, reject ) {
-		var json;
-		var query = client.query( {
-			name: queryName,
-			text: sql,
-			values: [ actorId ]
-		} );
-		query.on( "row", function( row ) {
-			json = row.content;
-		} );
-		query.on( "end", function() {
-			if( json ) {
-				resolve( json );
-			} else {
-				resolve( undefined );
-			}
-		} );
-		query.on( "error", function( err ) {
-			reject( err );
-		} );
-	} );
+async function createIdMapTable (client, type) {
+  const sql = templates('create_id_map_table', type)
+  return client(pg =>
+    pg.query(sql)
+      .catch(
+        (err) => {
+          if (err) {
+            const msg = `Creating snapshot table for ${type} failed with ${err}`
+            log.error(msg)
+            throw new Error(msg)
+          }
+        }
+      )
+  )
 }
 
-function findAncestor() {
-	return when.reject( new Error( "Postgres actor stores don't support siblings or ancestry." ) );
+async function createIdMapFunction (client, type) {
+  const sql = templates(`set_id_map`, type)
+  return client(pg =>
+    pg.query(sql)
+      .catch(
+        (err) => {
+          if (err) {
+            const msg = `Creating snapshot function for ${type} failed with ${err}`
+            log.error(msg)
+            throw new Error(msg)
+          }
+        }
+      )
+  )
 }
 
-function getVersion( vector ) {
-	var clocks = vector.split( ";" );
-	return clocks.reduce( function( version, clock ) {
-		var parts = clock.split( ":" );
-		return version + parseInt( parts[ 1 ] );
-	}, 0 );
+async function fetch (client, queryName, sql, actorId) {
+  return client(pg =>
+    pg.query({
+      name: queryName,
+      text: sql,
+      values: [ actorId ]
+    })
+    .then(
+      res => res.rows[0].content
+    )
+  )
 }
 
-function store( client, queryName, sql, actorId, vectorClock, actor ) {
-	return when.promise( function( resolve, reject ) {
-		var version = getVersion( vectorClock || "" );
-		var json = JSON.stringify( actor );
-		var query = client.query( {
-			name: queryName,
-			text: sql,
-			values: [
-				actorId,
-				( isNaN( version ) ? 0 : version ),
-				vectorClock,
-				json
-			]
-		} );
-		query.on( "error", function( err ) {
-			reject( err );
-		} );
-		query.on( "end", function() {
-			resolve();
-		} );
-	} );
+async function fetchByLastEventIdentifier (client, queryName, sql, actorId, eventIdentifier) {
+  return client(pg =>
+    pg.query({
+      name: queryName,
+      text: sql,
+      values: [ actorId, eventIdentifier ]
+    })
+    .then(
+      res => {
+        return res.rows.length ?
+          res.rows[0].content :
+          undefined
+      }
+    )
+  )
 }
 
-module.exports = function( client, type ) {
-	var fetchSql = templates( "select_snapshot", type );
-	var storeSql = templates( "insert_snapshot", type );
-	createTable( client, type );
-	return {
-		fetch: fetch.bind( null, client, "select_" + type + "_snapshot", fetchSql ),
-		findAncestor: findAncestor,
-		store: store.bind( null, client, "insert_" + type + "_snapshot", storeSql )
-	};
-};
+function findAncestor () {
+  return Promise.reject(new Error("Postgres actor stores don't support siblings or ancestry."))
+}
+
+async function getActorId (client, queryName, sql, systemId, asOf = new Date().toISOString()) {
+  return client(pg =>
+    pg.query({
+      name: queryName,
+      text: sql,
+      values: [
+        systemId,
+        asOf
+      ]
+    })
+    .then(
+      res => res.rows.length ?
+        res.rows[0].aggregate_id.trim() :
+        undefined
+    )
+  )
+}
+
+async function getSystemId (client, queryName, sql, aggregateId, asOf = new Date().toISOString()) {
+  return client(pg =>
+    pg.query({
+      name: queryName,
+      text: sql,
+      values: [
+        aggregateId,
+        asOf
+      ]
+    })
+    .then(
+      res => res.rows.length ?
+        res.rows[0].system_id.trim() :
+        undefined
+    )
+  )
+}
+
+function getVersion (vector) {
+  let clocks = vector.split(';')
+  return clocks.reduce((version, clock) => {
+    let parts = clock.split(':')
+    return version + parseInt(parts[ 1 ])
+  }, 0)
+}
+
+async function mapIds (client, type, queryName, sql, systemId, aggregateId) {
+  return client(pg =>
+    pg.query({
+      name: queryName,
+      text: `SELECT set_${type}_id_map($1, $2);`,
+      values: [
+        systemId,
+        aggregateId
+      ]
+    })
+  )
+}
+
+async function store (client, queryName, sql, actorId, vectorClock, actor) {
+  let version = getVersion(vectorClock || '')
+  let json = JSON.stringify(actor)
+  return client(pg =>
+    pg.query({
+      name: queryName,
+      text: sql,
+      values: [
+        actorId,
+        (isNaN(version) ? 0 : version),
+        vectorClock,
+        json,
+        actor.lastEventId,
+        actor.lastCommandId,
+        actor.lastCommandHandledOn,
+        actor.lastEventAppliedOn
+      ]
+    })
+  )
+}
+
+module.exports = function (client, type) {
+  const fetchSql = templates('select_snapshot', type)
+  const storeSql = templates('insert_snapshot', type)
+  const fetchByLastDateSql = templates('select_snapshot_by_lastEventDate', type)
+  const fetchByLastIdSql = templates('select_snapshot_by_lastEventId', type)
+  const fetchAggregateIdSql = templates('select_aggregate_id', type)
+  const fetchSystemIdSql = templates('select_system_id', type)
+  const setIdMap = templates('set_id_map', type)
+
+  return Promise.all([
+    createTable(client, type),
+    createIdMapTable(client, type),
+    createIdMapFunction(client, type),
+  ]).then(
+    () => {
+      return {
+        fetch: fetch.bind(null, client, `select_${type}_snapshot`, fetchSql),
+        fetchByLastEventDate: fetchByLastEventIdentifier.bind(null, client, `select_${type}_by_lastDate`, fetchByLastDateSql),
+        fetchByLastEventId: fetchByLastEventIdentifier.bind(null, client, `select_${type}_by_lastId`, fetchByLastIdSql),
+        findAncestor: findAncestor,
+        getActorId: getActorId.bind(null, client, `select_${type}_aggregate_id`, fetchAggregateIdSql),
+        getSystemId: getSystemId.bind(null, client, `select_${type}_system_id`, fetchSystemIdSql),
+        mapIds: mapIds.bind(null, client, type, `map_${type}_ids`, setIdMap),
+        store: store.bind(null, client, `insert_${type}_snapshot`, storeSql)
+      }
+    }
+  )
+}

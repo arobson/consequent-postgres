@@ -1,15 +1,11 @@
+DROP TABLE <%=entity%>_event;
 CREATE TABLE IF NOT EXISTS <%=entity%>_event (
-	id						character(42)	PRIMARY KEY,
-	aggregate_id			character(42)	NOT NULL,
-	aggregate_version		bigint			NOT NULL,
-	aggregate_vector		varchar(9192) 	NOT NULL,
-	content			json
+	id				character(42)	PRIMARY KEY,
+	created_on		timestamp with time zone 		DEFAULT now(),
+	system_id		character(42)	NOT NULL,
+	version			bigint			NOT NULL,
+	vector			varchar(9192) 	NOT NULL,
+	content			jsonb
 );
 
-
-DO $$
-BEGIN
-	IF ( to_regclass( '<%=entity%>_event_aggregate_id_idx' ) IS NULL ) THEN
-		CREATE INDEX <%=entity%>_event_aggregate_id_idx on <%=entity%>_event(aggregate_id);
-	END IF;
-END$$;
+CREATE INDEX IF NOT EXISTS <%=entity%>_event_system_id_idx on <%=entity%>_event(system_id);

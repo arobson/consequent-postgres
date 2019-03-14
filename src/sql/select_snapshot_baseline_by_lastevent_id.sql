@@ -1,4 +1,4 @@
-INSERT INTO <%=entity%>_snapshot ( 
+SELECT
   id,
   version,
   vector,
@@ -7,5 +7,7 @@ INSERT INTO <%=entity%>_snapshot (
   lastCommandId,
   lastCommandHandledOn,
   lastEventAppliedOn
-)
-VALUES ( $1, $2, $3, $4, $5, $6, $7, $8 );
+FROM <%=entity%>_snapshot
+WHERE id = $1 AND lastEventId >= $2
+ORDER BY version ASC
+LIMIT 1;

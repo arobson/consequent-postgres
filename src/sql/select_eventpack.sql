@@ -1,6 +1,6 @@
 SELECT
-	aggregate_id,
-	aggregate_vector,
+	id,
+	vector,
 	content
 FROM <%=entity%>_eventpack
-WHERE aggregate_id = $1 AND aggregate_vector = $2;
+WHERE id = $1 AND vector = $2;
