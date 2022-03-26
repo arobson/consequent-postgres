@@ -10,12 +10,9 @@ Snapshots, events and event packs are all stored in actor/entity-specific tables
 
 ```javascript
 var consequentFn = require( "consequent" );
-var stores = require( "consequent-postgres" )( {
-	host: "postgres-server",
-	database: "database-name",
-	user: "user-name",
-	password: "user-pw"
-} );
+var stores = require( "consequent-postgres" )(
+	"postgresql://dbuser:secretpassword@database.server.com:3211/mydb"
+);
 
 var consequent = consequentFn( {
 	actorStore: stores.actor,
