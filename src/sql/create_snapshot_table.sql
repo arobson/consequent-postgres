@@ -1,4 +1,3 @@
-DROP TABLE <%=entity%>_snapshot;
 CREATE TABLE IF NOT EXISTS <%=entity%>_snapshot (
 	id								character(42)	NOT NULL,
 	version							bigint 			NOT NULL,

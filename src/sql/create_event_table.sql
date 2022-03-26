@@ -1,4 +1,3 @@
-DROP TABLE <%=entity%>_event;
 CREATE TABLE IF NOT EXISTS <%=entity%>_event (
 	id				character(42)	PRIMARY KEY,
 	created_on		timestamp with time zone 		DEFAULT now(),
