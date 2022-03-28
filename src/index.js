@@ -7,7 +7,7 @@ const searchAdapter = require('./search')
 
 function initialize (config) {
   let pool = new Pool({
-    connectionString: config.connectionString || "postgresql://consequent:pgadmin@localhost:5432"
+    connectionString: config.connectionString || 'postgresql://consequent:pgadmin@localhost:5432'
   })
   const onClient = async function onClient (op) {
     const client = await pool.connect()

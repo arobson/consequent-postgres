@@ -32,11 +32,7 @@ describe('Event Adapter', function () {
     let events
     before(function () {
       adapter = Adapter({
-        database: 'consequent',
-        user: 'consequent',
-        password: 'pgadmin',
-        host: 'localhost',
-        port: '5432'
+        connectionString: 'postgresql://consequent:pgadmin@localhost:5431/consequent'
       })
       return adapter.event.create('test')
         .then(x => {

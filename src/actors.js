@@ -57,7 +57,13 @@ async function fetch (client, queryName, sql, actorId) {
       values: [ actorId ]
     })
     .then(
-      res => res.rows[0].content
+      res => {
+        if (res.rows.length > 0) {
+          return res.rows[0].content
+        } else {
+          return undefined
+        }
+      }
     )
   )
 }
