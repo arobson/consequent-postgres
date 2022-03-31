@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [1.3.0](https://github.com/arobson/consequent-postgres/compare/v1.0.2...v1.3.0) (2022-03-31)
+
+
+### Features
+
+* change connection method to use a connection string ([2d6aa73](https://github.com/arobson/consequent-postgres/commit/2d6aa739da09adb9621a446e1460a036b51b2879))
+
+
+### Bug Fixes
+
+* bump fauxdash version ([ce877be](https://github.com/arobson/consequent-postgres/commit/ce877be0aa16ad8538783277391071d0c5792ce9))
+* switch dev sql instance port and avoid throwing errors on missing rows ([15b446b](https://github.com/arobson/consequent-postgres/commit/15b446b8dd78a9d491c4e47f12f222725354fdc3))
+
 ## 1.2.0 (2022-03-28)
 
 
