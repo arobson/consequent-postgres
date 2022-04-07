@@ -24,7 +24,7 @@ async function getEventsFor (client, queryName, sql, actorId, lastEventId) {
       values: [ actorId, lastEventId || '' ]
     })
     .then(
-      res => res.rows,
+      res => res.rows.map(r => r.content),
       err => {
         const msg = `Getting events by '${queryName}' failed with ${err.stack}`
         log.error(msg)
@@ -42,7 +42,7 @@ async function getEventsSince (client, queryName, sql, actorId, date) {
       values: [ actorId, lastEventId || '' ]
     })
     .then(
-      res => res.rows,
+      res => res.rows.map(r => r.content),
       err => {
         const msg = `Getting events by '${queryName}' failed with ${err.stack}`
         log.error(msg)
