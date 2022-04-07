@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [1.3.1](https://github.com/arobson/consequent-postgres/compare/v1.2.0...v1.3.1) (2022-04-07)
+
+
+### Bug Fixes
+
+* bump fauxdash version ([ce877be](https://github.com/arobson/consequent-postgres/commit/ce877be0aa16ad8538783277391071d0c5792ce9))
+* fix issue causing the wrong return from getEventsFor and getEventsSince ([2a931e8](https://github.com/arobson/consequent-postgres/commit/2a931e8d1db93021c4c97b1e8a14f0f0b09c78bb))
+
 ## [1.3.0](https://github.com/arobson/consequent-postgres/compare/v1.0.2...v1.3.0) (2022-03-31)
 
 
