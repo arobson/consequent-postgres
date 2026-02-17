@@ -20,7 +20,7 @@ BEGIN
     ELSE
         WITH upd_row AS (
             UPDATE <%=entity%>_search
-            SET fields = fields
+            SET fields = set_<%=entity%>_search_fields.fields
             WHERE id = systemId
             RETURNING *
         )

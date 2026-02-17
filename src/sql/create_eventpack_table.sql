@@ -1,6 +1,6 @@
 CREATE TABLE IF NOT EXISTS <%=entity%>_eventpack (
-	id				character(42)	NOT NULL,
+	id				varchar(255)	NOT NULL,
 	vector			varchar(9192) 	NOT NULL,
-	content			bytes,
+	content			jsonb			NOT NULL,
 	PRIMARY KEY ( id, vector )
 );

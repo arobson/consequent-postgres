@@ -14,7 +14,8 @@ BEGIN
     ELSE
         WITH upd_row AS (
             UPDATE <%=entity%>_id_map
-            SET aggregate_id = aggregateId, starting_on = now()
+            SET aggregate_id = aggregateId
+            -- Don't update starting_on to avoid timing issues with asOf queries
             WHERE system_id = systemId
             RETURNING *
         )

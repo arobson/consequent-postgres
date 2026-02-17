@@ -9,3 +9,8 @@ coverage/
 plato/
 demo/
 .nyc_output/
+dist/
+dist-test/
+*.tsbuildinfo
+.vitest/
+scratch/
