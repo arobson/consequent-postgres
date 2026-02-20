@@ -49,6 +49,9 @@ build: ## Build TypeScript to JavaScript
 	@echo "$(CYAN)Building TypeScript...$(RESET)"
 	npm run build
 	@echo "$(GREEN)✓ Build complete$(RESET)"
+	@echo "$(CYAN)Copying SQL to dist$(RESET)"
+	cp -r src/sql dist/sql
+	@echo "$(GREEN)✓ SQL copied to dist$(RESET)"
 
 .PHONY: build-watch
 build-watch: ## Build TypeScript in watch mode
