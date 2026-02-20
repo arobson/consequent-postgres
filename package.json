@@ -1,6 +1,6 @@
 {
   "name": "consequent-postgres",
-  "version": "2.0.1",
+  "version": "2.0.2",
   "description": "Postgres actor and event storage adapters for consequent",
   "type": "module",
   "main": "./dist/index.js",
@@ -13,7 +13,7 @@
   },
   "files": [
     "dist",
-    "src/sql"
+    "dist/sql"
   ],
   "scripts": {
     "build": "tsc",
