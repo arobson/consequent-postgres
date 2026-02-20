@@ -1,6 +1,6 @@
 {
   "name": "consequent-postgres",
-  "version": "2.0.2",
+  "version": "2.0.3",
   "description": "Postgres actor and event storage adapters for consequent",
   "type": "module",
   "main": "./dist/index.js",
@@ -25,7 +25,7 @@
     "test:coverage": "vitest run --coverage",
     "typecheck": "tsc --noEmit",
     "clean": "rm -rf dist dist-test",
-    "prepublishOnly": "npm run clean && npm run build",
+    "prepublishOnly": "make build",
     "release": "npm run build && npm test && changeset publish"
   },
   "repository": {
