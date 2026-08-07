@@ -6,10 +6,15 @@ function trim(list: string[]): string[] {
   return list.map(x => x.trim())
 }
 
-// Helper to convert actor IDs to expected system IDs
-// Search returns system IDs (sys-*), not actor IDs
-function toSystemIds(actorIds: string[]): string[] {
-  return actorIds.map(id => `sys-${id}`)
+// find() translates its internal system-id search-table keys back to
+// actor ids before returning -- every other adapter method (fetch,
+// mapIds, getActorId) already deals in actor ids, and consequent's own
+// core `manager.getOrCreate(type, id)` requires them; a bare system id
+// silently fetched/created a blank actor under the wrong id. Kept as a
+// passthrough (not simply inlined at each call site) so the intent
+// -- "this is the id space find() results are in" -- stays visible.
+function toActorIds(actorIds: string[]): string[] {
+  return actorIds
 }
 
 describe('Search Adapter - Comprehensive Tests', () => {
@@ -75,7 +80,7 @@ describe('Search Adapter - Comprehensive Tests', () => {
         )
 
         const result = await search.find([{ name: 'John Doe' }])
-        expect(trim(result)).toContain('sys-user-001')
+        expect(trim(result)).toContain('user-001')
       })
 
       it('should index multiple fields', async () => {
@@ -93,9 +98,9 @@ describe('Search Adapter - Comprehensive Tests', () => {
         const byEmail = await search.find([{ email: 'john@example.com' }])
         const byAge = await search.find([{ age: 30 }])
 
-        expect(trim(byName)).toContain('sys-user-001')
-        expect(trim(byEmail)).toContain('sys-user-001')
-        expect(trim(byAge)).toContain('sys-user-001')
+        expect(trim(byName)).toContain('user-001')
+        expect(trim(byEmail)).toContain('user-001')
+        expect(trim(byAge)).toContain('user-001')
       })
 
       it('should update existing indexed fields', async () => {
@@ -117,8 +122,8 @@ describe('Search Adapter - Comprehensive Tests', () => {
         const draft = await search.find([{ status: 'draft' }])
         const published = await search.find([{ status: 'published' }])
 
-        expect(trim(draft)).not.toContain('sys-doc-001')
-        expect(trim(published)).toContain('sys-doc-001')
+        expect(trim(draft)).not.toContain('doc-001')
+        expect(trim(published)).toContain('doc-001')
       })
 
       it('should handle nested field paths', async () => {
@@ -134,7 +139,7 @@ describe('Search Adapter - Comprehensive Tests', () => {
         )
 
         const result = await search.find([{ 'profile.name': 'Jane Smith' }])
-        expect(trim(result)).toContain('sys-user-001')
+        expect(trim(result)).toContain('user-001')
       })
 
       it('should handle array fields', async () => {
@@ -148,7 +153,7 @@ describe('Search Adapter - Comprehensive Tests', () => {
 
         // Note: Array handling depends on implementation
         const result = await search.find([{ tags: { contains: 'typescript' } }])
-        expect(trim(result)).toContain('sys-post-001')
+        expect(trim(result)).toContain('post-001')
       })
 
       it('should handle numeric fields', async () => {
@@ -164,8 +169,8 @@ describe('Search Adapter - Comprehensive Tests', () => {
         const byPrice = await search.find([{ price: 99.99 }])
         const byQuantity = await search.find([{ quantity: 42 }])
 
-        expect(trim(byPrice)).toContain('sys-product-001')
-        expect(trim(byQuantity)).toContain('sys-product-001')
+        expect(trim(byPrice)).toContain('product-001')
+        expect(trim(byQuantity)).toContain('product-001')
       })
 
       it('should handle boolean fields', async () => {
@@ -181,8 +186,8 @@ describe('Search Adapter - Comprehensive Tests', () => {
         const active = await search.find([{ active: true }])
         const notVerified = await search.find([{ verified: false }])
 
-        expect(trim(active)).toContain('sys-account-001')
-        expect(trim(notVerified)).toContain('sys-account-001')
+        expect(trim(active)).toContain('account-001')
+        expect(trim(notVerified)).toContain('account-001')
       })
 
       it('should handle null values', async () => {
@@ -198,7 +203,7 @@ describe('Search Adapter - Comprehensive Tests', () => {
         // Searching for null might not be directly supported
         // This test validates the update doesn't fail and we can search by other fields
         const result = await search.find([{ status: 'active' }])
-        expect(trim(result)).toContain('sys-record-001')
+        expect(trim(result)).toContain('record-001')
       })
     })
   })
@@ -217,20 +222,20 @@ describe('Search Adapter - Comprehensive Tests', () => {
 
     it('should find exact string match', async () => {
       const result = await search.find([{ name: 'Alice' }])
-      expect(trim(result)).toEqual(toSystemIds(['user-001']))
+      expect(trim(result)).toEqual(toActorIds(['user-001']))
     })
 
     it('should find exact number match', async () => {
       await search.update(['age'], { id: 'user-005', age: 25 })
       const result = await search.find([{ age: 25 }])
-      expect(trim(result)).toContain('sys-user-005')
+      expect(trim(result)).toContain('user-005')
     })
 
     it('should find by multiple fields (AND)', async () => {
       const result = await search.find([
         { name: 'Alice', status: 'active' }
       ])
-      expect(trim(result)).toEqual(toSystemIds(['user-001']))
+      expect(trim(result)).toEqual(toActorIds(['user-001']))
     })
 
     it('should return empty for no matches', async () => {
@@ -240,6 +245,40 @@ describe('Search Adapter - Comprehensive Tests', () => {
 
     it('should be case-sensitive', async () => {
       const result = await search.find([{ name: 'alice' }])
+      expect(result).toEqual([])
+    })
+  })
+
+  describe('flat criteria object (consequent core compatibility)', () => {
+    // consequent's own core `find(type, criteria)` API -- and its built-in
+    // in-memory default adapter -- pass a single flat object, not an array
+    // of OR'd sets. Plugging this adapter into a real `consequent.initialize()`
+    // call previously threw (or, combined with consequent's own un-awaited
+    // Promise, silently returned []) because this adapter only accepted an
+    // array. A bare object must work identically to a one-element array.
+    beforeEach(async () => {
+      await adapter.client(pg => pg.query('TRUNCATE TABLE search_test_search CASCADE'))
+
+      await Promise.all([
+        search.update(['name', 'status'], { id: 'user-001', name: 'Alice', status: 'active' }),
+        search.update(['name', 'status'], { id: 'user-002', name: 'Bob', status: 'inactive' })
+      ])
+    })
+
+    it('should accept a bare object the same as a one-element array', async () => {
+      const arrayForm = await search.find([{ name: 'Alice' }])
+      const objectForm = await search.find({ name: 'Alice' })
+      expect(trim(objectForm)).toEqual(trim(arrayForm))
+      expect(trim(objectForm)).toEqual(toActorIds(['user-001']))
+    })
+
+    it('should AND multiple fields on a bare object', async () => {
+      const result = await search.find({ name: 'Alice', status: 'active' })
+      expect(trim(result)).toEqual(toActorIds(['user-001']))
+    })
+
+    it('should return empty for a bare object with no matches', async () => {
+      const result = await search.find({ name: 'NonExistent' })
       expect(result).toEqual([])
     })
   })
@@ -260,8 +299,8 @@ describe('Search Adapter - Comprehensive Tests', () => {
     describe('greater than (gt)', () => {
       it('should find values greater than threshold', async () => {
         const result = await search.find([{ price: { gt: 30 } }])
-        expect(trim(result)).toEqual(expect.arrayContaining(toSystemIds(['prod-004', 'prod-005'])))
-        expect(trim(result)).not.toContain('sys-prod-003')
+        expect(trim(result)).toEqual(expect.arrayContaining(toActorIds(['prod-004', 'prod-005'])))
+        expect(trim(result)).not.toContain('prod-003')
       })
 
       it('should handle edge case at boundary', async () => {
@@ -273,20 +312,20 @@ describe('Search Adapter - Comprehensive Tests', () => {
     describe('greater than or equal (gte)', () => {
       it('should find values greater than or equal to threshold', async () => {
         const result = await search.find([{ price: { gte: 30 } }])
-        expect(trim(result)).toEqual(expect.arrayContaining(toSystemIds(['prod-003', 'prod-004', 'prod-005'])))
+        expect(trim(result)).toEqual(expect.arrayContaining(toActorIds(['prod-003', 'prod-004', 'prod-005'])))
       })
 
       it('should include boundary value', async () => {
         const result = await search.find([{ price: { gte: 50 } }])
-        expect(trim(result)).toEqual(toSystemIds(['prod-005']))
+        expect(trim(result)).toEqual(toActorIds(['prod-005']))
       })
     })
 
     describe('less than (lt)', () => {
       it('should find values less than threshold', async () => {
         const result = await search.find([{ price: { lt: 30 } }])
-        expect(trim(result)).toEqual(expect.arrayContaining(toSystemIds(['prod-001', 'prod-002'])))
-        expect(trim(result)).not.toContain('sys-prod-003')
+        expect(trim(result)).toEqual(expect.arrayContaining(toActorIds(['prod-001', 'prod-002'])))
+        expect(trim(result)).not.toContain('prod-003')
       })
 
       it('should handle edge case at boundary', async () => {
@@ -298,12 +337,12 @@ describe('Search Adapter - Comprehensive Tests', () => {
     describe('less than or equal (lte)', () => {
       it('should find values less than or equal to threshold', async () => {
         const result = await search.find([{ price: { lte: 30 } }])
-        expect(trim(result)).toEqual(expect.arrayContaining(toSystemIds(['prod-001', 'prod-002', 'prod-003'])))
+        expect(trim(result)).toEqual(expect.arrayContaining(toActorIds(['prod-001', 'prod-002', 'prod-003'])))
       })
 
       it('should include boundary value', async () => {
         const result = await search.find([{ price: { lte: 10 } }])
-        expect(trim(result)).toEqual(toSystemIds(['prod-001']))
+        expect(trim(result)).toEqual(toActorIds(['prod-001']))
       })
     })
 
@@ -312,7 +351,7 @@ describe('Search Adapter - Comprehensive Tests', () => {
         const result = await search.find([
           { price: { gte: 20, lte: 40 } }
         ])
-        expect(trim(result)).toEqual(expect.arrayContaining(toSystemIds(['prod-002', 'prod-003', 'prod-004'])))
+        expect(trim(result)).toEqual(expect.arrayContaining(toActorIds(['prod-002', 'prod-003', 'prod-004'])))
         expect(trim(result)).toHaveLength(3)
       })
     })
@@ -330,7 +369,7 @@ describe('Search Adapter - Comprehensive Tests', () => {
         const result = await search.find([
           { createdAt: { gte: '2024-06-01T00:00:00.000Z' } }
         ])
-        expect(trim(result)).toEqual(expect.arrayContaining(toSystemIds(['event-002', 'event-003'])))
+        expect(trim(result)).toEqual(expect.arrayContaining(toActorIds(['event-002', 'event-003'])))
       })
     })
   })
@@ -350,12 +389,12 @@ describe('Search Adapter - Comprehensive Tests', () => {
 
     it('should find values within range (inclusive)', async () => {
       const result = await search.find([{ score: [25, 75] }])
-      expect(trim(result)).toEqual(expect.arrayContaining(toSystemIds(['test-002', 'test-003', 'test-004'])))
+      expect(trim(result)).toEqual(expect.arrayContaining(toActorIds(['test-002', 'test-003', 'test-004'])))
     })
 
     it('should handle range with same min and max', async () => {
       const result = await search.find([{ score: [50, 50] }])
-      expect(trim(result)).toEqual(toSystemIds(['test-003']))
+      expect(trim(result)).toEqual(toActorIds(['test-003']))
     })
 
     it('should return empty for range with no matches', async () => {
@@ -379,17 +418,17 @@ describe('Search Adapter - Comprehensive Tests', () => {
     describe('match (LIKE)', () => {
       it('should match pattern with wildcards', async () => {
         const result = await search.find([{ title: { match: '%JavaScript%' } }])
-        expect(trim(result)).toEqual(expect.arrayContaining(toSystemIds(['doc-001', 'doc-002'])))
+        expect(trim(result)).toEqual(expect.arrayContaining(toActorIds(['doc-001', 'doc-002'])))
       })
 
       it('should match prefix pattern', async () => {
         const result = await search.find([{ title: { match: 'JavaScript%' } }])
-        expect(trim(result)).toEqual(toSystemIds(['doc-001']))
+        expect(trim(result)).toEqual(toActorIds(['doc-001']))
       })
 
       it('should match suffix pattern', async () => {
         const result = await search.find([{ title: { match: '%Guide' } }])
-        expect(trim(result)).toEqual(toSystemIds(['doc-003']))
+        expect(trim(result)).toEqual(toActorIds(['doc-003']))
       })
 
       it('should return empty for no pattern match', async () => {
@@ -409,7 +448,7 @@ describe('Search Adapter - Comprehensive Tests', () => {
 
       it('should find arrays containing value', async () => {
         const result = await search.find([{ tags: { contains: 'javascript' } }])
-        expect(trim(result)).toEqual(expect.arrayContaining(toSystemIds(['post-001', 'post-003'])))
+        expect(trim(result)).toEqual(expect.arrayContaining(toActorIds(['post-001', 'post-003'])))
       })
 
       it('should return empty when value not in any array', async () => {
@@ -436,13 +475,13 @@ describe('Search Adapter - Comprehensive Tests', () => {
         const result = await search.find([
           { status: { in: ['todo', 'in-progress'] } }
         ])
-        expect(trim(result)).toEqual(expect.arrayContaining(toSystemIds(['task-001', 'task-002'])))
+        expect(trim(result)).toEqual(expect.arrayContaining(toActorIds(['task-001', 'task-002'])))
         expect(trim(result)).toHaveLength(2)
       })
 
       it('should handle single value in set', async () => {
         const result = await search.find([{ status: { in: ['done'] } }])
-        expect(trim(result)).toEqual(toSystemIds(['task-003']))
+        expect(trim(result)).toEqual(toActorIds(['task-003']))
       })
 
       it('should return empty for values not in set', async () => {
@@ -459,15 +498,15 @@ describe('Search Adapter - Comprehensive Tests', () => {
     describe('not', () => {
       it('should find values not equal to specified value', async () => {
         const result = await search.find([{ status: { not: 'done' } }])
-        expect(trim(result)).toEqual(expect.arrayContaining(toSystemIds(['task-001', 'task-002', 'task-004'])))
-        expect(trim(result)).not.toContain('sys-task-003')
+        expect(trim(result)).toEqual(expect.arrayContaining(toActorIds(['task-001', 'task-002', 'task-004'])))
+        expect(trim(result)).not.toContain('task-003')
       })
 
       it('should handle not with array of values', async () => {
         const result = await search.find([
           { status: { not: ['done', 'blocked'] } }
         ])
-        expect(trim(result)).toEqual(expect.arrayContaining(toSystemIds(['task-001', 'task-002'])))
+        expect(trim(result)).toEqual(expect.arrayContaining(toActorIds(['task-001', 'task-002'])))
       })
     })
   })
@@ -489,7 +528,7 @@ describe('Search Adapter - Comprehensive Tests', () => {
         const result = await search.find([
           { age: 25, city: 'NYC' }
         ])
-        expect(trim(result)).toEqual(toSystemIds(['user-001']))
+        expect(trim(result)).toEqual(toActorIds(['user-001']))
       })
 
       it('should return empty when not all criteria match', async () => {
@@ -503,7 +542,7 @@ describe('Search Adapter - Comprehensive Tests', () => {
         const result = await search.find([
           { age: { gte: 30 }, city: 'LA' }
         ])
-        expect(trim(result)).toEqual(toSystemIds(['user-002']))
+        expect(trim(result)).toEqual(toActorIds(['user-002']))
       })
     })
 
@@ -513,7 +552,7 @@ describe('Search Adapter - Comprehensive Tests', () => {
           { city: 'NYC' },
           { city: 'LA' }
         ])
-        expect(trim(result)).toEqual(expect.arrayContaining(toSystemIds(['user-001', 'user-002', 'user-003', 'user-004'])))
+        expect(trim(result)).toEqual(expect.arrayContaining(toActorIds(['user-001', 'user-002', 'user-003', 'user-004'])))
       })
 
       it('should support complex OR', async () => {
@@ -521,7 +560,7 @@ describe('Search Adapter - Comprehensive Tests', () => {
           { age: 25, city: 'NYC' },
           { age: 30, city: 'LA' }
         ])
-        expect(trim(result)).toEqual(expect.arrayContaining(toSystemIds(['user-001', 'user-002'])))
+        expect(trim(result)).toEqual(expect.arrayContaining(toActorIds(['user-001', 'user-002'])))
         expect(trim(result)).toHaveLength(2)
       })
 
@@ -532,7 +571,7 @@ describe('Search Adapter - Comprehensive Tests', () => {
         ])
         // user-003 matches both criteria (age: 25 AND city: LA)
         // Should appear only once
-        expect(trim(result)).toEqual(expect.arrayContaining(toSystemIds(['user-001', 'user-002', 'user-003'])))
+        expect(trim(result)).toEqual(expect.arrayContaining(toActorIds(['user-001', 'user-002', 'user-003'])))
       })
     })
 
@@ -542,7 +581,7 @@ describe('Search Adapter - Comprehensive Tests', () => {
           { age: 25, city: 'NYC' },  // Alice
           { age: 35, city: 'NYC' }   // Diana
         ])
-        expect(trim(result)).toEqual(expect.arrayContaining(toSystemIds(['user-001', 'user-004'])))
+        expect(trim(result)).toEqual(expect.arrayContaining(toActorIds(['user-001', 'user-004'])))
       })
     })
   })
@@ -573,26 +612,26 @@ describe('Search Adapter - Comprehensive Tests', () => {
 
     it('should query nested fields', async () => {
       const result = await search.find([{ 'profile.name': 'John' }])
-      expect(trim(result)).toEqual(toSystemIds(['user-001']))
+      expect(trim(result)).toEqual(toActorIds(['user-001']))
     })
 
     it('should query deeply nested fields', async () => {
       const result = await search.find([{ 'address.city': 'NYC' }])
-      expect(trim(result)).toEqual(toSystemIds(['user-001']))
+      expect(trim(result)).toEqual(toActorIds(['user-001']))
     })
 
     it('should support operators on nested fields', async () => {
       const result = await search.find([
         { 'profile.email': { match: '%@example.com' } }
       ])
-      expect(trim(result)).toEqual(expect.arrayContaining(toSystemIds(['user-001', 'user-002'])))
+      expect(trim(result)).toEqual(expect.arrayContaining(toActorIds(['user-001', 'user-002'])))
     })
 
     it('should support AND across nested fields', async () => {
       const result = await search.find([
         { 'profile.name': 'John', 'address.city': 'NYC' }
       ])
-      expect(trim(result)).toEqual(toSystemIds(['user-001']))
+      expect(trim(result)).toEqual(toActorIds(['user-001']))
     })
   })
 
@@ -614,8 +653,8 @@ describe('Search Adapter - Comprehensive Tests', () => {
       const byName = await search.find([{ name: '你好世界' }])
       const byDesc = await search.find([{ description: 'Hello 世界 🌍' }])
 
-      expect(trim(byName)).toEqual(toSystemIds(['item-001']))
-      expect(trim(byDesc)).toEqual(toSystemIds(['item-001']))
+      expect(trim(byName)).toEqual(toActorIds(['item-001']))
+      expect(trim(byDesc)).toEqual(toActorIds(['item-001']))
     })
 
     it('should handle special characters and SQL injection attempts', async () => {
@@ -629,7 +668,7 @@ describe('Search Adapter - Comprehensive Tests', () => {
       )
 
       const result = await search.find([{ code: "'; DROP TABLE search; --" }])
-      expect(trim(result)).toEqual(toSystemIds(['dangerous-001']))
+      expect(trim(result)).toEqual(toActorIds(['dangerous-001']))
 
       // Verify table still exists (no SQL injection)
       const verify = await search.find([{ id: 'dangerous-001' }])
@@ -646,7 +685,7 @@ describe('Search Adapter - Comprehensive Tests', () => {
       )
 
       const result = await search.find([{ text: `She said "hello" and he said 'hi'` }])
-      expect(trim(result)).toEqual(toSystemIds(['quote-001']))
+      expect(trim(result)).toEqual(toActorIds(['quote-001']))
     })
 
     it('should handle empty strings', async () => {
@@ -656,7 +695,7 @@ describe('Search Adapter - Comprehensive Tests', () => {
       )
 
       const result = await search.find([{ name: '' }])
-      expect(trim(result)).toEqual(toSystemIds(['empty-001']))
+      expect(trim(result)).toEqual(toActorIds(['empty-001']))
     })
 
     it('should handle very long strings', async () => {
@@ -667,7 +706,7 @@ describe('Search Adapter - Comprehensive Tests', () => {
       )
 
       const result = await search.find([{ description: longText }])
-      expect(trim(result)).toEqual(toSystemIds(['long-001']))
+      expect(trim(result)).toEqual(toActorIds(['long-001']))
     })
 
     it('should preserve field type information', async () => {
@@ -684,8 +723,8 @@ describe('Search Adapter - Comprehensive Tests', () => {
       const stringMatch = await search.find([{ stringNum: '42' }])
       const numberMatch = await search.find([{ actualNum: 42 }])
 
-      expect(trim(stringMatch)).toEqual(toSystemIds(['type-001']))
-      expect(trim(numberMatch)).toEqual(toSystemIds(['type-001']))
+      expect(trim(stringMatch)).toEqual(toActorIds(['type-001']))
+      expect(trim(numberMatch)).toEqual(toActorIds(['type-001']))
     })
   })
 
@@ -750,7 +789,7 @@ describe('Search Adapter - Comprehensive Tests', () => {
       // Verify all were indexed
       for (const u of updates) {
         const result = await search.find([{ value: u.value }])
-        expect(trim(result)).toContain(`sys-${u.id}`)
+        expect(trim(result)).toContain(u.id)
       }
     })
 
@@ -766,9 +805,9 @@ describe('Search Adapter - Comprehensive Tests', () => {
       const r2 = await search.find([{ field25: 'value-25' }])
       const r3 = await search.find([{ field49: 'value-49' }])
 
-      expect(trim(r1)).toEqual(toSystemIds(['many-fields-001']))
-      expect(trim(r2)).toEqual(toSystemIds(['many-fields-001']))
-      expect(trim(r3)).toEqual(toSystemIds(['many-fields-001']))
+      expect(trim(r1)).toEqual(toActorIds(['many-fields-001']))
+      expect(trim(r2)).toEqual(toActorIds(['many-fields-001']))
+      expect(trim(r3)).toEqual(toActorIds(['many-fields-001']))
     })
   })
 
@@ -798,7 +837,7 @@ describe('Search Adapter - Comprehensive Tests', () => {
       )
 
       const result = await search.find([{ status: 'active' }])
-      expect(trim(result)).not.toContain('sys-doc-001')
+      expect(trim(result)).not.toContain('doc-001')
     })
 
     it('should handle query with empty criteria array', async () => {
@@ -821,7 +860,7 @@ describe('Search Adapter - Comprehensive Tests', () => {
       )
 
       const exact = await search.find([{ title: '  spaces  ' }])
-      expect(trim(exact)).toEqual(toSystemIds(['space-001']))
+      expect(trim(exact)).toEqual(toActorIds(['space-001']))
     })
 
     it('should handle zero values correctly', async () => {
@@ -831,7 +870,7 @@ describe('Search Adapter - Comprehensive Tests', () => {
       )
 
       const result = await search.find([{ count: 0 }])
-      expect(trim(result)).toEqual(toSystemIds(['zero-001']))
+      expect(trim(result)).toEqual(toActorIds(['zero-001']))
     })
 
     it('should handle false boolean values', async () => {
@@ -841,7 +880,7 @@ describe('Search Adapter - Comprehensive Tests', () => {
       )
 
       const result = await search.find([{ enabled: false }])
-      expect(trim(result)).toEqual(toSystemIds(['bool-001']))
+      expect(trim(result)).toEqual(toActorIds(['bool-001']))
     })
   })
 
@@ -872,7 +911,7 @@ describe('Search Adapter - Comprehensive Tests', () => {
         { category: 'Electronics', price: { lt: 500 }, inStock: true }
       ])
 
-      expect(trim(result)).toEqual(toSystemIds(['prod-002']))
+      expect(trim(result)).toEqual(toActorIds(['prod-002']))
     })
 
     it('should support user search with multiple criteria', async () => {
@@ -907,7 +946,7 @@ describe('Search Adapter - Comprehensive Tests', () => {
         }
       ])
 
-      expect(trim(result)).toEqual(expect.arrayContaining(toSystemIds(['user-001', 'user-002'])))
+      expect(trim(result)).toEqual(expect.arrayContaining(toActorIds(['user-001', 'user-002'])))
     })
 
     it('should support tag-based content filtering', async () => {
@@ -931,7 +970,7 @@ describe('Search Adapter - Comprehensive Tests', () => {
         { tags: { contains: 'javascript' }, status: 'published' }
       ])
 
-      expect(trim(result)).toEqual(toSystemIds(['post-001']))
+      expect(trim(result)).toEqual(toActorIds(['post-001']))
     })
   })
 })

@@ -119,7 +119,11 @@ export interface EventStore {
 }
 
 export interface SearchAdapter {
-  find: (criteria: SearchCriteria[]) => Promise<string[]>
+  // Accepts either a single flat criteria object -- the shape consequent's
+  // own core `find(type, criteria)` API and default in-memory adapter use
+  // -- or an explicit array of OR'd criteria sets for direct callers of
+  // this adapter (see README).
+  find: (criteria: SearchCriteria[] | SearchCriteria) => Promise<string[]>
   update: (fieldList: string[], updated: Record<string, unknown>, original?: Record<string, unknown>) => Promise<QueryResult>
 }
 

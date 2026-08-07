@@ -6,6 +6,10 @@ function trim(list: string[]): string[] {
   return list.map(x => x.trim())
 }
 
+// find() translates its internal system-id search-table keys back to
+// actor ids before returning (see search.ts) -- assertions below expect
+// the actor id passed to actors.mapIds(systemId, actorId), not the
+// system id itself.
 describe('Search Adapter', () => {
   describe('when connection is valid', () => {
     let adapter: ConsequentPostgres
@@ -190,7 +194,7 @@ describe('Search Adapter', () => {
           const result = await search.find([
             { id: '0000000001' }
           ])
-          expect(trim(result)).toEqual(['000000000a'])
+          expect(trim(result)).toEqual(['0000000001'])
         })
       })
 
@@ -199,35 +203,35 @@ describe('Search Adapter', () => {
           const result = await search.find([
             { on: { lt: '2017-03-12T08:00:00.000Z' } }
           ])
-          expect(trim(result)).toEqual(['000000000a'])
+          expect(trim(result)).toEqual(['0000000001'])
         })
 
         it('should find matches less than or equal to', async () => {
           const result = await search.find([
             { on: { lte: '2017-02-12T08:00:00.000Z' } }
           ])
-          expect(trim(result)).toEqual(['000000000a'])
+          expect(trim(result)).toEqual(['0000000001'])
         })
 
         it('should find matches based on equality', async () => {
           const result = await search.find([
             { on: '2017-10-20T08:00:00.000Z' }
           ])
-          expect(trim(result)).toEqual(['00000000b0'])
+          expect(trim(result)).toEqual(['0000000013'])
         })
 
         it('should find matches greater than or equal to', async () => {
           const result = await search.find([
             { on: { gte: '2017-11-05T08:00:00.000Z' } }
           ])
-          expect(trim(result)).toEqual(['00000000ba'])
+          expect(trim(result)).toEqual(['0000000014'])
         })
 
         it('should find matches greater than', async () => {
           const result = await search.find([
             { on: { gt: '2017-10-20T08:00:00.000Z' } }
           ])
-          expect(trim(result)).toEqual(['00000000ba'])
+          expect(trim(result)).toEqual(['0000000014'])
         })
       })
     })
