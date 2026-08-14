@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [2.0.6](https://github.com/arobson/consequent-postgres/compare/v2.0.5...v2.0.6) (2026-08-14)
+
+
+### Bug Fixes
+
+* **ci:** bump bootstrap-sha past a commit release-please cannot parse ([5da458d](https://github.com/arobson/consequent-postgres/commit/5da458dc2af2121c99cfe208519415bd747eb4fa))
+
 ## [2.0.5](https://github.com/arobson/consequent-postgres/compare/v2.0.4...v2.0.5) (2026-08-14)
 
 
