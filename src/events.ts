@@ -1,17 +1,18 @@
 import { createLogger } from './logger.js'
-import { resolveTemplate } from './sql.js'
+import { resolveTemplate, isConcurrentCreateRace } from './sql.js'
 import type { Event, EventStore, EventStreamOptions, AsyncIterableResult, OnClient } from './types.js'
 import type { Pool, QueryResult } from 'pg'
 import type Cursor from 'pg-cursor'
 
 const log = createLogger('pg-event-store')
 
-async function createEventTable(client: OnClient, type: string): Promise<QueryResult> {
+async function createEventTable(client: OnClient, type: string): Promise<QueryResult | undefined> {
   const sql = resolveTemplate('create_event_table', type)
   return client(pg =>
     pg.query(sql)
       .catch(
         (err: Error) => {
+          if (isConcurrentCreateRace(err)) return undefined
           const msg = `creating the event table for ${type} failed with ${err.stack}`
           log.error(msg)
           throw new Error(msg)
@@ -20,12 +21,13 @@ async function createEventTable(client: OnClient, type: string): Promise<QueryRe
   )
 }
 
-async function createEventPackTable(client: OnClient, type: string): Promise<QueryResult> {
+async function createEventPackTable(client: OnClient, type: string): Promise<QueryResult | undefined> {
   const sql = resolveTemplate('create_eventpack_table', type)
   return client(pg =>
     pg.query(sql)
       .catch(
         (err: Error) => {
+          if (isConcurrentCreateRace(err)) return undefined
           const msg = `creating the event pack table for ${type} failed with ${err.stack}`
           log.error(msg)
           throw new Error(msg)

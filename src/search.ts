@@ -1,16 +1,17 @@
 import { createLogger } from './logger.js'
-import { resolveTemplate } from './sql.js'
+import { resolveTemplate, isConcurrentCreateRace } from './sql.js'
 import type { SearchAdapter, SearchCriteria, SearchPredicate, OnClient } from './types.js'
 import type { QueryResult } from 'pg'
 
 const log = createLogger('pg-search-store')
 
-async function createSearchTable(client: OnClient, type: string): Promise<QueryResult> {
+async function createSearchTable(client: OnClient, type: string): Promise<QueryResult | undefined> {
   const sql = resolveTemplate('create_search_table', type)
   return client(pg =>
     pg.query(sql)
       .catch(
         (err: Error) => {
+          if (isConcurrentCreateRace(err)) return undefined
           const msg = `creating the search table for ${type} failed with ${err.stack}`
           log.error(msg)
           throw new Error(msg)
@@ -19,18 +20,27 @@ async function createSearchTable(client: OnClient, type: string): Promise<QueryR
   )
 }
 
-async function createIdMapTable(client: OnClient, type: string): Promise<QueryResult> {
+async function createIdMapTable(client: OnClient, type: string): Promise<QueryResult | undefined> {
   // Both set_<type>_search_fields (via createSetFieldsFunction) and find's
   // own system-id-to-actor-id translation depend on this table. It's
   // normally created by the actor adapter's own create(type), but search
   // can be the first adapter touched for a type (e.g. a `find()` computing
   // "next version" before any actor of that type has ever been stored) --
   // CREATE TABLE IF NOT EXISTS makes creating it here again harmless.
+  //
+  // "Harmless" doesn't extend to *concurrent* creation, though: IF NOT
+  // EXISTS only guards the check, not the underlying CREATE, so the actor
+  // and search adapters racing to create the same type's id-map table (a
+  // normal startup pattern, not a rare edge case) can both pass the check
+  // and then collide on Postgres's own pg_type catalog. That collision
+  // means the table now exists either way, so it's swallowed as success
+  // rather than surfaced as a real failure.
   const sql = resolveTemplate('create_id_map_table', type)
   return client(pg =>
     pg.query(sql)
       .catch(
         (err: Error) => {
+          if (isConcurrentCreateRace(err)) return undefined
           const msg = `creating the id map table for ${type} failed with ${err.stack}`
           log.error(msg)
           throw new Error(msg)
@@ -39,12 +49,13 @@ async function createIdMapTable(client: OnClient, type: string): Promise<QueryRe
   )
 }
 
-async function createSetFieldsFunction(client: OnClient, type: string): Promise<QueryResult> {
+async function createSetFieldsFunction(client: OnClient, type: string): Promise<QueryResult | undefined> {
   const sql = resolveTemplate('set_search_fields', type)
   return client(pg =>
     pg.query(sql)
       .catch(
         (err: Error) => {
+          if (isConcurrentCreateRace(err)) return undefined
           if (err) {
             const msg = `Creating set search field function for ${type} failed with ${err.message}`
             log.error(msg)

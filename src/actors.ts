@@ -1,16 +1,17 @@
 import { createLogger } from './logger.js'
-import { resolveTemplate } from './sql.js'
+import { resolveTemplate, isConcurrentCreateRace } from './sql.js'
 import type { Actor, ActorStore, OnClient } from './types.js'
 import type { QueryResult } from 'pg'
 
 const log = createLogger('pg-actor-store')
 
-async function createTable(client: OnClient, type: string): Promise<QueryResult> {
+async function createTable(client: OnClient, type: string): Promise<QueryResult | undefined> {
   const sql = resolveTemplate('create_snapshot_table', type)
   return client(pg =>
     pg.query(sql)
       .catch(
         (err: Error) => {
+          if (isConcurrentCreateRace(err)) return undefined
           if (err) {
             const msg = `Creating snapshot table for ${type} failed with ${err.message}`
             log.error(msg)
@@ -22,12 +23,13 @@ async function createTable(client: OnClient, type: string): Promise<QueryResult>
   )
 }
 
-async function createIdMapTable(client: OnClient, type: string): Promise<QueryResult> {
+async function createIdMapTable(client: OnClient, type: string): Promise<QueryResult | undefined> {
   const sql = resolveTemplate('create_id_map_table', type)
   return client(pg =>
     pg.query(sql)
       .catch(
         (err: Error) => {
+          if (isConcurrentCreateRace(err)) return undefined
           if (err) {
             const msg = `Creating id map table for ${type} failed with ${err.message}`
             log.error(msg)
@@ -39,12 +41,13 @@ async function createIdMapTable(client: OnClient, type: string): Promise<QueryRe
   )
 }
 
-async function createIdMapFunction(client: OnClient, type: string): Promise<QueryResult> {
+async function createIdMapFunction(client: OnClient, type: string): Promise<QueryResult | undefined> {
   const sql = resolveTemplate('set_id_map', type)
   return client(pg =>
     pg.query(sql)
       .catch(
         (err: Error) => {
+          if (isConcurrentCreateRace(err)) return undefined
           if (err) {
             const msg = `Creating id map function for ${type} failed with ${err.message}`
             log.error(msg)

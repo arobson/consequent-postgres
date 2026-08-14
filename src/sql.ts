@@ -47,3 +47,22 @@ export function resolveTemplate(name: TemplateName, entity: string): string {
   }
   return interpolateTemplate(template, entity)
 }
+
+// `CREATE TABLE/INDEX/FUNCTION IF NOT EXISTS` is not safe under concurrent
+// execution: two connections can both pass the existence check before
+// either commits, and the second CREATE then loses a race on Postgres's
+// own system catalogs (pg_type/pg_proc) rather than on the IF NOT EXISTS
+// check itself. This is a real, reachable race -- every adapter here calls
+// these creators from its own create(type), and multiple adapters (or
+// replicas) initializing the same type concurrently is a normal startup
+// pattern, not an edge case. The losing side's target object still ends up
+// existing, so treating these specific catalog-collision codes as success
+// is correct, not just convenient: 23505 unique_violation (what actually
+// surfaces for the pg_type/pg_proc catalog collision), 42P07
+// duplicate_table, 42710 duplicate_object.
+const CONCURRENT_CREATE_RACE_CODES = new Set(['23505', '42P07', '42710'])
+
+export function isConcurrentCreateRace(err: unknown): boolean {
+  const code = (err as { code?: string } | undefined)?.code
+  return Boolean(code && CONCURRENT_CREATE_RACE_CODES.has(code))
+}
