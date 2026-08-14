@@ -1,6 +1,6 @@
 {
   "name": "consequent-postgres",
-  "version": "2.0.4",
+  "version": "2.0.5",
   "description": "Postgres actor and event storage adapters for consequent",
   "type": "module",
   "main": "./dist/index.js",
