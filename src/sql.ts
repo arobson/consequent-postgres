@@ -59,8 +59,14 @@ export function resolveTemplate(name: TemplateName, entity: string): string {
 // existing, so treating these specific catalog-collision codes as success
 // is correct, not just convenient: 23505 unique_violation (what actually
 // surfaces for the pg_type/pg_proc catalog collision), 42P07
-// duplicate_table, 42710 duplicate_object.
-const CONCURRENT_CREATE_RACE_CODES = new Set(['23505', '42P07', '42710'])
+// duplicate_table, 42710 duplicate_object, 40001 serialization_failure
+// ("tuple concurrently updated" -- confirmed live against a real cluster:
+// two near-simultaneous CREATE OR REPLACE FUNCTION set_<type>_search_fields
+// calls, on a fresh type's very first use, hit this instead of one of the
+// three codes above -- Postgres's own catalog-row-update conflict path,
+// distinct from but exactly the same class of benign race as the others;
+// the losing side's function still ends up existing either way).
+const CONCURRENT_CREATE_RACE_CODES = new Set(['23505', '42P07', '42710', '40001'])
 
 export function isConcurrentCreateRace(err: unknown): boolean {
   const code = (err as { code?: string } | undefined)?.code
