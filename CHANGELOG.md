@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [2.0.7](https://github.com/arobson/consequent-postgres/compare/v2.0.6...v2.0.7) (2026-08-19)
+
+
+### Bug Fixes
+
+* recognize 40001 as a concurrent-create race too ([ef05dac](https://github.com/arobson/consequent-postgres/commit/ef05dacfb1bf5b8a5e22177f02cd104488078503))
+
 ## [2.0.6](https://github.com/arobson/consequent-postgres/compare/v2.0.5...v2.0.6) (2026-08-14)
 
 
